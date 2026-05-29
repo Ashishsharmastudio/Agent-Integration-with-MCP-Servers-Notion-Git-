@@ -1,22 +1,37 @@
-# MCP Agent (Flask + Notion/GitHub via MCP)
+# Alignment-Driven Development (ADD) Agent 
+### Implementing an Intent-to-Code Traceability Protocol via MCP
 
-Production-ready skeleton using **official** MCP servers:
-- **GitHub MCP Server** over STDIO with `GITHUB_PERSONAL_ACCESS_TOKEN` and `GITHUB_TOOLSETS`. :contentReference[oaicite:15]{index=15}
-- **Notion MCP** via `@notionhq/notion-mcp-server` (tools: `notion-search`, `notion-fetch`, auto-aliased to `search`/`fetch` in some hosts). :contentReference[oaicite:16]{index=16}
-- Python MCP SDK client flow: `stdio_client` → `ClientSession.initialize()` → `call_tool()`; parse `CallToolResult` (text/JSON/resources). :contentReference[oaicite:17]{index=17}
+A closed-loop AI governance architecture designed to bridge business intent (Notion) and execution state (GitHub) using the Model Context Protocol (MCP).
 
-## Features
+## 🛑 The Problem: Spec Entropy
+In AI-assisted software development, teams often ship generated code faster than they can govern it. A feature is defined in a spec, passed to an LLM, and merged. Over time, the codebase drifts from the original business intent, creating a massive vacuum of stateful memory. 
 
-- **LLM-Powered Tool Selection**: Intelligent tool selection based on tool descriptions and JSON schemas
-- **Direct Tool Execution**: Commit count queries return direct answers ("The repository has 3 commits")
-- **Feature Comparison**: Compare features between Notion documentation and GitHub code
-- **Multi-Source Synthesis**: AI synthesizes responses using data from both Notion and GitHub
-- **Docker Support**: Run the application in Docker containers
-- **Comprehensive Testing**: Full test suite for all components
+This repository provides an **Intent-to-Code Traceability Protocol** to solve this. It forces the LLM to govern its code against the original intent, ensuring that the AI reads the manual before it touches the codebase. Instead of bolting an LLM onto a task tracker, this agent acts as a stateful governance bridge between your documentation and your codebase.
 
-## Quickstart
+## 🏗️ Core Architecture: The Governance Loop
+This system operates on a 4-step orchestration loop, leveraging MCP servers to maintain context isolation and data security.
+
+1. **The Intent Layer (Notion MCP):** We treat Notion as the immutable source of truth for specs and architectural decisions. The agent is forced to read the manual before touching the code.
+2. **The Governance Bridge (Reasoning Engine):** A semantic router (`reasoning.py`) analyzes the query, selects the appropriate MCP tools, and maps the business logic to the codebase, ensuring context isn't lost in translation.
+3. **The Execution State (GitHub MCP):** The agent walks the repository tree and reads the current state of the code (`mcp_manager.py`).
+4. **The Audit Trail:** The agent facilitates a decision ledger that survives team turnover by embedding the exact Notion spec URL into the resulting Git commit message, establishing permanent traceability from product intent to merged commit.
+
+---
+
+### 🧠 The "Alignment Gate" Implementation (`feature_diff.py`)
+At the core of the governance loop is the Alignment Gate. Before execution, the system performs a deterministic feature diff between the Notion spec and the GitHub repository to halt "fixes" that violate the documented intent.
+* It extracts structured requirement lists from the Notion markdown.
+* It extracts implemented features from the Git blob.
+* It computes a deterministic intersection (`overlap`, `only_in_notion`, `only_in_code`).
+* It surfaces the top 3 architectural gaps that the engineering team (or AI) needs to prioritize to realign with the spec.
+
+---
+
+## 🚀 Quickstart & Deployment
+This architecture is production-ready and containerized.
 
 ### Option 1: Single-Command Docker Execution (Recommended)
+Launch the fully containerized governance bridge:
 ```bash
 # Linux/macOS
 ./run_with_docker.sh
@@ -28,55 +43,53 @@ run_with_docker.bat
 ### Option 2: Manual Setup
 ```bash
 cp .env.example .env
-# fill tokens
+# Fill in required tokens
 pip install -r requirements.txt
 python app.py
-# GET http://127.0.0.1:5000/agent?query=compare%20features%20between%20docs%20and%20code
 ```
 
-## Available Tools
+---
 
-The MCP Agent has access to 35+ tools across GitHub and Notion:
+## 🔌 API & Alignment Gates in Action
+The agent operates via a central unified endpoint (`GET /agent`) and has access to 35+ granular tools across your intent and execution layers.
 
-### GitHub Tools (17 tools)
-- `list_commits` - Get list of commits in a repository
-- `list_branches` - List branches in a repository
-- `get_file_contents` - Get file or directory contents
-- `search_code` - Search code across GitHub repositories
-- `search_repositories` - Find repositories by various criteria
-- `get_latest_release` - Get the latest release information
-- And 12 more tools for repository management
+**Example Workflows:**
 
-### Notion Tools (18 tools)
-- `notion-search` - Search Notion pages
-- `notion-fetch` - Fetch Notion page content
-- `API-post-search` - Direct API search
-- And 15 more tools for content management
+* **Triggering the Alignment Gate:** 
+  `GET /agent?query=compare%20features%20between%20docs%20and%20code`
+  *Returns a strict feature diff evaluating code reality against the Notion spec.*
+* **Auditing the Ledger:** 
+  `GET /agent?query=how%20many%20commits%20are%20in%20the%20repository`
+  *Direct tool execution returning the current state of the execution layer.*
+* **Verifying Intent:** 
+  `GET /agent?query=Find%20documentation%20about%20the%20API`
+  *Forces the agent to synthesize a response from the designated source of truth.*
 
-## API Endpoints
+---
 
-- `GET /healthz` - Health check endpoint
-- `GET /agent` - Main query endpoint
-  - Parameters:
-    - `query` (required) - The query string
-
-## Example Queries
-
-- **Commit Information**: "How many commits are in the repository?" → "The repository has 3 commits."
-- **Branch Information**: "What branches are in the repo?" → List of branches
-- **Feature Comparison**: "Compare features between docs and code" → Detailed feature diff
-- **General Queries**: "What is this project about?" → AI-synthesized response
-- **Code Search**: "Find documentation about the API" → Relevant results from GitHub
-
-## Environment Variables
+## 🔑 Environment Configuration
+To secure the Governance Bridge, the following keys must be supplied in your `.env`:
 
 | Variable | Description | Required |
 |----------|-------------|----------|
-| `OPENAI_API_KEY` | OpenAI API key for LLM access | ✅ |
-| `GITHUB_PERSONAL_ACCESS_TOKEN` | GitHub personal access token | ✅ |
+| `OPENAI_API_KEY` | Orchestrates the Semantic Router & Alignment Diff | ✅ |
+| `GITHUB_PERSONAL_ACCESS_TOKEN` | Grants the Execution Layer read access | ✅ |
 | `GITHUB_TOOLSETS` | GitHub toolsets (default: repos) | ✅ |
-| `GITHUB_REPO` | GitHub repository in `owner/repo` format | ✅ |
+| `GITHUB_REPO` | Target repository in `owner/repo` format | ✅ |
 | `GITHUB_DEFAULT_REF` | Default branch (default: master) | ✅ |
-| `NOTION_TOKEN` | Notion integration token | ✅ |
+| `NOTION_TOKEN` | Grants the Intent Layer read access | ✅ |
 | `PORT` | Application port (default: 5000) | ❌ |
 | `FLASK_ENV` | Flask environment (default: development) | ❌ |
+
+---
+
+## 🧪 Testing the Traceability Protocol
+The repository includes a comprehensive test suite covering the reasoning engine, the alignment gates, and the MCP state managers.
+
+```bash
+# Test the unified workflow
+python test_workflow.py
+
+# Run all unit and integration tests
+python run_tests.py
+```
